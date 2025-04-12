@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id
+  name      String?
+  username  String?
+  email     String    @unique
+  password  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  Roadmap   Roadmap[]
+  Quiz      Quiz[]
+}
+
+model Roadmap {
+  id             String         @id @default(uuid())
+  userId         String
+  syllabus       String
+  subject        String
+  level          String?
+  exam           String?
+  difficulty     Difficulty     @default(intermediate)
+  completionTime Int            @default(4)
+  priorKnowledge PriorKnowledge @default(beginner)
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt   DateTime      @default(now())
+  RoadmapItem RoadmapItem[]
+}
+
+enum Difficulty {
+  beginner
+  intermediate
+  advanced
+}
+
+enum PriorKnowledge {
+  none
+  beginner
+  intermediate
+  advanced
+}
+
+model RoadmapItem {
+  id        String  @id @default(uuid())
+  roadmapId String
+  roadmap   Roadmap @relation(fields: [roadmapId], references: [id])
+
+  name               String
+  subtopics          String[]
+  completedSubtopics String[]
+  completionTime     Int
+  resources          String[]
+  youtubeLink        String?
+
+  createdAt DateTime @default(now())
+}
+
+model Quiz {
+  id        String     @id @default(uuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id])
+  topic     String
+  score     Float?     @default(0)
+  createdAt DateTime   @default(now())
+  QuizItem  QuizItem[]
+}
+
+model QuizItem {
+  id        String   @id @default(uuid())
+  quizId    String
+  quiz      Quiz     @relation(fields: [quizId], references: [id])
+  question  String
+  options   String[]
+  answer    String
+  createdAt DateTime @default(now())
+}
+
+model SubtopicDetail {
+  id           String   @id @default(cuid())
+  subtopicName String   @unique
+  details      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
