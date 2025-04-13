@@ -25,6 +25,12 @@ An intelligent learning platform that leverages AI to generate personalized stud
 - YouTube video recommendations
 - Personalized content based on your learning style
 
+### 4. AI Tutor
+
+- Engage in interactive video lecture (with animated texts, graph, equations and flowcharts)
+- Get explanations and clarifications on demand with AI
+- Track generated videos history
+
 ## 🚀 Tech Stack
 
 - **Frontend**: Next.js 15.1.4, React 19.0.0
@@ -69,6 +75,7 @@ SIGNING_SECRET="your-webhook-secret"
 DATA_API="your-ai-api-endpoint"
 ROADMAP_API="your-ai-api-endpoint"
 QUIZ_API="your-ai-api-endpoint"
+AITUTOR_API_BASE_URL="your-ai-tutor-api-base-url"
 ```
 
 4. Run database migrations
@@ -105,6 +112,11 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
    - Generate topic-specific quizzes
    - Answer questions and get instant feedback
    - Track your progress
+
+4. **Use the AI Tutor**
+   - Navigate to the AI Tutor section
+   - Generate a video based on your learning topic with customization like language and accent of the speaker.
+   - Get past generated videos and their download links
 
 ## 🤝 Contributing
 
