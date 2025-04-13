@@ -6,6 +6,7 @@ import { auth } from "@clerk/nextjs/server";
 
 import "@/app/globals.css";
 import Header from "@/components/header";
+import { AiTutorPersistentTimer } from "@/components/ai-tutor-persistent-timer";
 
 export default async function DashboardLayout({
   children,
@@ -33,11 +34,20 @@ export default async function DashboardLayout({
         <Link href={"/generate-quiz"}>
           <Image src="/dashboard/quiz.svg" width={25} height={25} alt="logo" />
         </Link>
+        <Link href={"/ai-tutor"}>
+          <Image
+            src="/dashboard/ai-tutor.svg"
+            width={25}
+            height={25}
+            alt="ai tutor logo"
+          />
+        </Link>
       </div>
       <div className="p-10 pl-28">
         <Header />
       </div>
       <Suspense>{children}</Suspense>
+      <AiTutorPersistentTimer /> {/* Add the persistent timer here */}
     </div>
   );
 }

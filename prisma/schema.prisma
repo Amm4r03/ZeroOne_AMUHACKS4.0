@@ -15,8 +15,23 @@ model User {
   password  String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  Roadmap   Roadmap[]
-  Quiz      Quiz[]
+  Roadmap       Roadmap[]
+  Quiz          Quiz[]
+  AiTutorVideos AiTutorVideo[] // Add relation to AiTutorVideo
+}
+
+// New model for storing AI Tutor video generation history
+model AiTutorVideo {
+  id        String   @id // Use the jobId as the primary key
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  topic     String
+  language  String // e.g., "en-US"
+  voice     String // e.g., "af_heart"
+  videoUrl  String // Constructed URL: VIDEO_API_URL_BASE + id
+  createdAt DateTime @default(now())
+
+  @@index([userId]) // Add index for faster lookups by user
 }
 
 model Roadmap {
