@@ -45,13 +45,26 @@ def check_manim_exists() -> bool:
 MANIM_EXECUTABLE_PATH = "manim"
 
 def parse_manim_output_path(stdout: str) -> Optional[str]:
-    """Parses Manim's stdout to find the final output file path, handling potential line breaks."""
+    """Parses Manim's stdout to find the final output file path, handling potential line breaks and extra whitespace."""
     # Use [\s\S]+? to match any character including newlines, non-greedily
     match = re.search(r"File ready at\s+'([\s\S]+?)'", stdout)
     if match:
-        # Clean up potential leading/trailing whitespace and join lines if needed
-        path = ''.join(match.group(1).splitlines()).strip()
-        logger.info(f"Parsed Manim output path: {path}")
+        # Remove ALL whitespace (newlines, spaces, etc.) from the captured path
+        path = re.sub(r'\s+', '', match.group(1))
+
+        # --- Add Sanity Checks ---
+        if not path:
+            logger.warning("Parsed path is empty after cleaning whitespace.")
+            return None
+        if not path.startswith('/'):
+            logger.warning(f"Parsed path '{path}' does not start with '/'. Potential parsing error.")
+            return None
+        if not path.endswith('.mp4'):
+            logger.warning(f"Parsed path '{path}' does not end with '.mp4'. Potential parsing error.")
+            return None
+        # --- End Sanity Checks ---
+
+        logger.info(f"Parsed and validated Manim output path: {path}")
         return path
     logger.warning("Could not parse output file path from Manim stdout."); return None
 
