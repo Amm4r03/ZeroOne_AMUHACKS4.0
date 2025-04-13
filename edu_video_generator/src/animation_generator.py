@@ -45,9 +45,14 @@ def check_manim_exists() -> bool:
 MANIM_EXECUTABLE_PATH = "manim"
 
 def parse_manim_output_path(stdout: str) -> Optional[str]:
-    """Parses Manim's stdout to find the final output file path."""
-    match = re.search(r"File ready at\s+'([^']+)'", stdout)
-    if match: path = match.group(1); logger.info(f"Parsed Manim output path: {path}"); return path
+    """Parses Manim's stdout to find the final output file path, handling potential line breaks."""
+    # Use [\s\S]+? to match any character including newlines, non-greedily
+    match = re.search(r"File ready at\s+'([\s\S]+?)'", stdout)
+    if match:
+        # Clean up potential leading/trailing whitespace and join lines if needed
+        path = ''.join(match.group(1).splitlines()).strip()
+        logger.info(f"Parsed Manim output path: {path}")
+        return path
     logger.warning("Could not parse output file path from Manim stdout."); return None
 
 def _calculate_cache_key(section_index: int, timed_elements: List[Dict[str, Any]], diagram_path: Optional[str], audio_duration: float) -> str:
