@@ -70,7 +70,7 @@ This API provides endpoints to generate educational videos based on a given topi
 
 2.  **Start Celery Worker:** Open a terminal, navigate to the project root (one level above `edu_video_generator`), activate the virtual environment, and run:
     ```bash
-    celery -A edu_video_generator.src.api.service worker --loglevel=info -P solo
+    cd edu_video_generator && celery -A src.api.service worker --loglevel=info -P solo
     ```
     *(Note: Using `-P solo` might be necessary on Windows or for simpler setups.)*
 
