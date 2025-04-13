@@ -29,7 +29,7 @@ JOB_DIR = OUTPUT_DIR / "jobs"
 ASSETS_DIR = PROJECT_BASE_DIR / os.getenv("ASSETS_DIR", "assets")
 
 # Rate limiting configuration (using Redis now)
-MAX_CONCURRENT_JOBS = int(os.getenv("MAX_CONCURRENT_JOBS", 2)) # Max jobs actively processed by workers
+MAX_CONCURRENT_JOBS = int(os.getenv("MAX_CONCURRENT_JOBS", 5)) # Max jobs actively processed by workers
 RATE_LIMIT_PERIOD = int(os.getenv("RATE_LIMIT_PERIOD", 3600))  # 1 hour in seconds
 MAX_JOBS_PER_PERIOD = int(os.getenv("MAX_JOBS_PER_PERIOD", 10)) # Max jobs accepted per period
 
