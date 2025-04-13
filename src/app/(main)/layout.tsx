@@ -42,6 +42,14 @@ export default async function DashboardLayout({
             alt="ai tutor logo"
           />
         </Link>
+        <Link href={"/flashcards"}>
+          <Image
+            src="/dashboard/flashcards.png"
+            width={25}
+            height={25}
+            alt="flashcards logo"
+          />
+        </Link>
       </div>
       <div className="p-10 pl-28">
         <Header />
