@@ -25,6 +25,32 @@ export default function FlashcardsIndex() {
   const [flashcardSets, setFlashcardSets] = useState<FlashcardSet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingSet, setDeletingSet] = useState<string | null>(null);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this flashcard set?")) {
+      return;
+    }
+    
+    try {
+      setDeletingSet(id);
+      const response = await fetch(`/api/flashcards/${id}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setFlashcardSets(sets => sets.filter(set => set.id !== id));
+      } else {
+        const data = await response.json();
+        setError(data.error || "Failed to delete flashcard set");
+      }
+    } catch (err) {
+      setError("Failed to delete flashcard set");
+      console.error(err);
+    } finally {
+      setDeletingSet(null);
+    }
+  };
 
   useEffect(() => {
     const fetchFlashcardSets = async () => {
@@ -124,9 +150,22 @@ export default function FlashcardsIndex() {
                     </span>
                     <p className="text-sm text-gray-500">Learned</p>
                   </div>
-                  <Link href={`/flashcards/${set.id}`}>
-                    <Button variant="outline">Study</Button>
-                  </Link>
+                  <div className="flex gap-2">
+                    <Link href={`/flashcards/${set.id}`}>
+                      <Button variant="outline">Study</Button>
+                    </Link>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => handleDelete(set.id)}
+                      disabled={deletingSet === set.id}
+                    >
+                      {deletingSet === set.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Delete"
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             );

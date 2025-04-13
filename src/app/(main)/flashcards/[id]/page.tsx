@@ -52,6 +52,43 @@ export default function FlashcardViewClient({ params }: { params: { id: string }
     fetchFlashcardSet();
   }, [params.id]);
 
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return; // Don't handle keypresses when typing in form elements
+      }
+      
+      switch (e.key.toLowerCase()) {
+        case ' ':
+        case 'enter':
+          e.preventDefault();
+          toggleFlip();
+          break;
+        case 'arrowright':
+        case 'n':
+          e.preventDefault();
+          handleNext();
+          break;
+        case 'arrowleft':
+        case 'p':
+          e.preventDefault();
+          handlePrevious();
+          break;
+        case 'h':
+          e.preventDefault();
+          !isFlipped && toggleHint();
+          break;
+        case 'l':
+          e.preventDefault();
+          markAsLearned();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [isFlipped]); // Only include isFlipped in dependencies to prevent unnecessary recreations
+
   const handleNext = () => {
     if (!flashcardSet) return;
     setIsFlipped(false);
@@ -75,10 +112,10 @@ export default function FlashcardViewClient({ params }: { params: { id: string }
     if (showHint) setShowHint(false);
   };
 
-  const toggleHint = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowHint(!showHint);
-  };
+  const toggleHint = (e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      setShowHint(!showHint);
+    };
 
   const markAsLearned = async () => {
     if (!flashcardSet) return;
@@ -164,7 +201,7 @@ export default function FlashcardViewClient({ params }: { params: { id: string }
 
       {/* Flashcard */}
       <div className="mx-auto max-w-2xl">
-        <div className="flip-card mb-8" className={isFlipped ? 'flipped' : ''} onClick={toggleFlip}>
+        <div className={`flip-card mb-8 ${isFlipped ? 'flipped' : ''}`}>
           <div className="flip-card-inner h-64">
             <div className="flip-card-front flex h-full flex-col items-center justify-center rounded-xl bg-white p-8 shadow-lg">
               <H2 className="mb-4">Question</H2>
@@ -192,22 +229,53 @@ export default function FlashcardViewClient({ params }: { params: { id: string }
             {!isFlipped && (
               <Button
                 variant="outline"
-                onClick={toggleHint}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleHint();
+                }}
               >
                 {showHint ? "Hide Hint" : "Show Hint"}
               </Button>
             )}
             <Button
               variant={currentCard.isLearned ? "default" : "outline"}
-              onClick={markAsLearned}
+              onClick={(e) => {
+                e.stopPropagation();
+                markAsLearned();
+              }}
             >
               {currentCard.isLearned ? "Learned" : "Mark as Learned"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFlip();
+              }}
+            >
+              {isFlipped ? "Show Question" : "Show Answer"}
             </Button>
           </div>
           
           <Button variant="outline" onClick={handleNext}>
             Next
           </Button>
+        </div>
+      </div>
+
+      {/* Add keyboard shortcuts help */}
+      <div className="mx-auto mt-8 max-w-2xl rounded-lg bg-gray-50 p-4">
+        <H2 className="mb-2">Keyboard Shortcuts</H2>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Para><kbd className="px-2 py-1 bg-white rounded border">Space</kbd> or <kbd className="px-2 py-1 bg-white rounded border">Enter</kbd> Flip card</Para>
+            <Para><kbd className="px-2 py-1 bg-white rounded border">→</kbd> or <kbd className="px-2 py-1 bg-white rounded border">N</kbd> Next card</Para>
+            <Para><kbd className="px-2 py-1 bg-white rounded border">←</kbd> or <kbd className="px-2 py-1 bg-white rounded border">P</kbd> Previous card</Para>
+          </div>
+          <div>
+            <Para><kbd className="px-2 py-1 bg-white rounded border">H</kbd> Toggle hint</Para>
+            <Para><kbd className="px-2 py-1 bg-white rounded border">L</kbd> Toggle learned status</Para>
+          </div>
         </div>
       </div>
     </div>
