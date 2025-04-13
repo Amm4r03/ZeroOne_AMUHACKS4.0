@@ -6,7 +6,7 @@ from starlette.status import HTTP_404_NOT_FOUND, HTTP_202_ACCEPTED, HTTP_200_OK 
 
 from .models import VideoRequest, JobResponse, JobStatus, SupportedLanguagesResponse, LanguageVoice
 from .service import (
-    create_job, get_job_data, # Removed start_background_job
+    create_job, get_job_data, cancel_job, # Added cancel_job
     SUPPORTED_VOICES, LANGUAGE_CODE_MAP
 )
 
@@ -158,3 +158,37 @@ async def health_check():
     Health check endpoint for the video generator API.
     """
     return {"status": "healthy", "version": "1.0.0"}
+
+
+@router.post(
+    "/cancel/{job_id}",
+    response_model=JobResponse,
+    responses={
+        200: {"description": "Job cancellation request accepted."},
+        404: {"description": "Job not found."},
+        409: {"description": "Job cannot be cancelled (e.g., already completed/failed/cancelled)."},
+        500: {"description": "Internal server error during cancellation."},
+        503: {"description": "Job tracking service unavailable."}
+    }
+)
+async def cancel_video_job(job_id: str = Path(..., description="The ID of the job to cancel")):
+    """
+    Request cancellation of a queued or processing video generation job.
+    """
+    try:
+        cancelled_job_data = cancel_job(job_id)
+        # Return the updated job data after cancellation attempt
+        return JobResponse(
+            job_id=cancelled_job_data["job_id"],
+            status=JobStatus(cancelled_job_data["status"]),
+            created_at=cancelled_job_data["created_at"],
+            topic=cancelled_job_data["topic"],
+            estimated_completion=cancelled_job_data.get("estimated_completion"),
+            progress=cancelled_job_data.get("progress", 0.0)
+        )
+    except HTTPException as e:
+        # Re-raise HTTP exceptions from cancel_job (like 404, 409, 503)
+        raise e
+    except Exception as e:
+        # Catch any other unexpected errors during cancellation
+        raise HTTPException(status_code=500, detail=f"Failed to cancel job: {str(e)}")

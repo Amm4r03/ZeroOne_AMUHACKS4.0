@@ -72,7 +72,7 @@ async def shutdown_event():
 if __name__ == "__main__":
     port = int(os.getenv("API_PORT", 4567))
     reload_flag = os.getenv("DEBUG", "False").lower() == "true"
-    workers_count = int(os.getenv("API_WORKERS", 1))
+    workers_count = int(os.getenv("API_WORKERS", 4))
     
     logger.info(f"Starting server on port {port} with reload={reload_flag} and workers={workers_count}")
     

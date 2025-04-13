@@ -19,7 +19,7 @@ from ..main import (
     get_default_voice_for_language, SUPPORTED_VOICES, LANGUAGE_CODE_MAP
 )
 from ..utils import ensure_dir_exists, cleanup_dir, logger
-from .models import JobStatus # Import JobStatus enum
+from .models import JobStatus
 
 # --- Configuration ---
 # Path configuration
@@ -78,6 +78,7 @@ JOB_DATA_PREFIX = "job:"
 ACTIVE_JOBS_SET = "active_jobs" # Set of job IDs currently being processed by workers
 JOB_TIMESTAMPS_ZSET = "job_timestamps" # Sorted set for rate limiting (score=timestamp, value=job_id)
 VIDEO_CACHE_PREFIX = "video_cache:" # Prefix for caching completed jobs
+JOB_CACHE_KEY_LOOKUP = "job_cache_lookup:" # Hash: cache_key -> job_id (for active/queued check)
 
 # --- Cache Configuration ---
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", 7 * 24 * 60 * 60)) # Default: 7 days
@@ -193,41 +194,65 @@ def can_start_new_job() -> bool:
 
 def create_job(request_data: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
     """
-    Check cache, create a new job if no valid cache entry exists, 
+    Check cache, check for active/queued duplicates, create a new job if none exist,
     store initial data in Redis, and queue it in Celery.
-    Returns a tuple: (job_data, is_cached)
+    Returns a tuple: (job_data, is_cached_or_duplicate)
     """
     if not redis_client:
         raise HTTPException(status_code=503, detail="Job tracking service (Redis) unavailable.")
 
-    # --- Cache Check ---
     cache_key = _generate_cache_key(request_data)
-    cached_job_id = redis_client.get(cache_key)
+    lookup_key = f"{JOB_CACHE_KEY_LOOKUP}{cache_key}" # Key for the hash lookup
 
-    if cached_job_id:
-        logger.info(f"Potential cache hit for key '{cache_key}', checking job ID '{cached_job_id}'")
-        cached_job_data = get_job_data(cached_job_id)
+    # --- Check 1: Completed Job Cache ---
+    cached_job_id_completed = redis_client.get(cache_key) # Check the TTL cache first
+    if cached_job_id_completed:
+        logger.info(f"Potential completed cache hit for key '{cache_key}', checking job ID '{cached_job_id_completed}'")
+        cached_job_data = get_job_data(cached_job_id_completed)
         if cached_job_data and cached_job_data.get("status") == JobStatus.COMPLETED.value:
-            # Verify the output file still exists
             output_path = cached_job_data.get("output_path")
             if output_path and os.path.exists(output_path):
-                logger.info(f"Cache hit: Returning completed job {cached_job_id} for request.")
-                # Return cached job data (excluding original request data for brevity)
+                logger.info(f"Cache hit (Completed): Returning completed job {cached_job_id_completed} for request.")
                 response_data = cached_job_data.copy()
-                if "request_data" in response_data:
-                    del response_data["request_data"]
+                if "request_data" in response_data: del response_data["request_data"]
                 return response_data, True # Signal that this came from cache
             else:
-                logger.warning(f"Cache hit for job {cached_job_id}, but output file '{output_path}' not found. Proceeding with new job.")
-                # Optionally remove the stale cache entry
-                redis_client.delete(cache_key)
+                logger.warning(f"Cache hit for completed job {cached_job_id_completed}, but output file '{output_path}' not found. Removing stale cache entry.")
+                redis_client.delete(cache_key) # Remove stale TTL cache
+                redis_client.hdel(lookup_key, cache_key) # Remove from lookup hash too
         else:
-             logger.info(f"Cached job ID {cached_job_id} found, but job status is not 'completed' or data is missing. Proceeding with new job.")
-             # Optionally remove the stale cache entry if status is not completed
-             redis_client.delete(cache_key) # Remove potentially stale cache entry
+             logger.info(f"Completed cache key '{cache_key}' points to job {cached_job_id_completed}, but job status is not 'completed' or data is missing. Removing stale cache entry.")
+             redis_client.delete(cache_key) # Remove potentially stale TTL cache
+             redis_client.hdel(lookup_key, cache_key) # Remove from lookup hash too
 
-    # --- No Cache Hit or Invalid Cache: Proceed with New Job Creation ---
-    logger.info(f"No valid cache entry found for key '{cache_key}'. Creating new job.")
+    # --- Check 2: Active/Queued Duplicate Job ---
+    # Use a hash to map cache_key -> job_id for non-completed jobs
+    existing_job_id = redis_client.hget(lookup_key, cache_key)
+    if existing_job_id:
+        logger.info(f"Potential active/queued duplicate found for key '{cache_key}', checking job ID '{existing_job_id}'")
+        existing_job_data = get_job_data(existing_job_id)
+        if existing_job_data:
+            status = existing_job_data.get("status")
+            if status in [JobStatus.QUEUED.value, JobStatus.PROCESSING.value]:
+                logger.info(f"Duplicate request: Job {existing_job_id} is already {status}. Returning existing job details.")
+                response_data = existing_job_data.copy()
+                if "request_data" in response_data: del response_data["request_data"]
+                return response_data, True # Signal that this is a duplicate
+            elif status in [JobStatus.COMPLETED.value, JobStatus.FAILED.value, JobStatus.CANCELLED.value]:
+                # Job finished/failed/cancelled but wasn't cleaned from lookup hash, clean it now
+                logger.warning(f"Found job {existing_job_id} in lookup hash with status {status}. Cleaning up stale lookup entry.")
+                redis_client.hdel(lookup_key, cache_key)
+            else:
+                 logger.warning(f"Found job {existing_job_id} in lookup hash with unknown status '{status}'. Cleaning up stale lookup entry.")
+                 redis_client.hdel(lookup_key, cache_key)
+        else:
+            # Job ID exists in lookup hash, but no data found in Redis. Clean up.
+            logger.warning(f"Found job ID {existing_job_id} in lookup hash, but no corresponding job data found. Cleaning up stale lookup entry.")
+            redis_client.hdel(lookup_key, cache_key)
+
+
+    # --- No Cache Hit or Duplicate Found: Proceed with New Job Creation ---
+    logger.info(f"No valid cache entry or active duplicate found for key '{cache_key}'. Creating new job.")
 
     # Check resource limits before creating a new job
     if not can_start_new_job():
@@ -258,23 +283,32 @@ def create_job(request_data: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
         "progress": 0.0,
         "request_data": request_data, # Store original request
         "output_path": None,
-        "error": None
+        "error": None,
+        "celery_task_id": None # Placeholder for Celery task ID
     }
 
     try:
-        # Store initial job data in Redis
+        # Store initial job data in Redis (before queueing)
         job_key = f"{JOB_DATA_PREFIX}{job_id}"
         redis_client.set(job_key, json.dumps(job_data))
 
         # Add job to rate limiting sorted set
         redis_client.zadd(JOB_TIMESTAMPS_ZSET, {job_id: time.time()})
 
+        # Add to the active/queued lookup hash
+        redis_client.hset(lookup_key, cache_key, job_id)
+
         # Queue the job in Celery
         task_signature = celery_app.send_task(
             'edu_video_generator.src.api.service.generate_video_task', # Full path to task
             args=[job_id, request_data] # Pass original request data to the task
         )
-        logger.info(f"Queued new job {job_id} with Celery task ID: {task_signature.id}")
+        celery_task_id = task_signature.id
+        logger.info(f"Queued new job {job_id} with Celery task ID: {celery_task_id}")
+
+        # Update job data in Redis with the Celery task ID
+        job_data["celery_task_id"] = celery_task_id
+        redis_client.set(job_key, json.dumps(job_data)) # Update with task ID
 
         # Return the initial job data (without request_data for brevity)
         response_data = job_data.copy()
@@ -287,7 +321,71 @@ def create_job(request_data: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
         if redis_client:
             redis_client.delete(f"{JOB_DATA_PREFIX}{job_id}")
             redis_client.zrem(JOB_TIMESTAMPS_ZSET, job_id)
+            redis_client.hdel(lookup_key, cache_key) # Clean up lookup hash too
         raise HTTPException(status_code=500, detail="Failed to create and queue job.")
+
+
+# --- Cancellation Function ---
+
+def cancel_job(job_id: str) -> Dict[str, Any]:
+    """Attempt to cancel a running or queued job."""
+    if not redis_client:
+        raise HTTPException(status_code=503, detail="Job tracking service (Redis) unavailable.")
+
+    job_data = get_job_data(job_id)
+    if not job_data:
+        raise HTTPException(status_code=404, detail=f"Job with ID {job_id} not found.")
+
+    status = job_data.get("status")
+    celery_task_id = job_data.get("celery_task_id")
+
+    if status == JobStatus.COMPLETED.value:
+        raise HTTPException(status_code=409, detail=f"Job {job_id} is already completed.")
+    if status == JobStatus.FAILED.value:
+        raise HTTPException(status_code=409, detail=f"Job {job_id} has already failed.")
+    if status == JobStatus.CANCELLED.value:
+        raise HTTPException(status_code=409, detail=f"Job {job_id} is already cancelled.")
+
+    if not celery_task_id:
+         # Should not happen if job creation is atomic, but handle defensively
+         logger.warning(f"Cannot cancel job {job_id}: Celery task ID not found in job data.")
+         # Update status to failed as something is wrong
+         update_job_status(job_id, JobStatus.FAILED, error="Internal error: Missing Celery task ID for cancellation.")
+         raise HTTPException(status_code=500, detail="Internal error preventing cancellation.")
+
+    logger.info(f"Attempting to cancel job {job_id} (Celery Task ID: {celery_task_id})")
+
+    try:
+        # Send revoke signal to Celery worker
+        # terminate=True sends SIGTERM to the worker process hosting the task
+        # signal='SIGTERM' is the default for terminate=True, but explicit for clarity
+        celery_app.control.revoke(celery_task_id, terminate=True, signal='SIGTERM')
+        logger.info(f"Revoke signal sent for Celery task {celery_task_id}")
+
+        # Update job status in Redis immediately
+        update_job_status(job_id, JobStatus.CANCELLED, progress=job_data.get("progress", 0.0)) # Keep last progress
+
+        # Remove from active set if it was processing
+        if status == JobStatus.PROCESSING.value:
+            redis_client.srem(ACTIVE_JOBS_SET, job_id)
+            logger.info(f"Removed cancelled job {job_id} from active set.")
+
+        # Remove from the cache lookup hash
+        cache_key = _generate_cache_key(job_data.get("request_data", {})) # Reconstruct cache key
+        lookup_key = f"{JOB_CACHE_KEY_LOOKUP}{cache_key}"
+        redis_client.hdel(lookup_key, cache_key)
+        logger.info(f"Removed cancelled job {job_id} from lookup hash.")
+
+        cancelled_job_data = get_job_data(job_id) # Get updated data
+        response_data = cancelled_job_data.copy()
+        if "request_data" in response_data: del response_data["request_data"]
+        return response_data
+
+    except Exception as e:
+        logger.error(f"Error during cancellation process for job {job_id}: {e}", exc_info=True)
+        # Don't necessarily mark as failed here, as revoke might eventually work,
+        # but report the error during the cancellation attempt.
+        raise HTTPException(status_code=500, detail=f"Error occurred while attempting to cancel job: {str(e)}")
 
 
 # --- Celery Task Definition ---
@@ -401,23 +499,45 @@ def generate_video_task(self, job_id: str, request_data: Dict[str, Any]) -> Dict
         # --- Populate Cache on Success ---
         try:
             cache_key = _generate_cache_key(request_data)
+            lookup_key = f"{JOB_CACHE_KEY_LOOKUP}{cache_key}"
             # Set cache key pointing to this completed job ID with TTL
             redis_client.setex(cache_key, CACHE_TTL_SECONDS, job_id)
-            logger.info(f"Populated cache for key '{cache_key}' with job ID '{job_id}' (TTL: {CACHE_TTL_SECONDS}s)")
+            # Remove from the active/queued lookup hash now that it's completed and cached
+            redis_client.hdel(lookup_key, cache_key)
+            logger.info(f"Populated cache for key '{cache_key}' and removed from lookup hash for job ID '{job_id}' (TTL: {CACHE_TTL_SECONDS}s)")
         except Exception as cache_e:
-            logger.error(f"Failed to populate cache for job {job_id}: {cache_e}", exc_info=True)
-        
+            logger.error(f"Failed to populate cache/cleanup lookup hash for job {job_id}: {cache_e}", exc_info=True)
+
         return {"job_id": job_id, "status": "completed", "output_path": output_path_str}
 
     except Exception as e:
-        error_message = f"Error processing job {job_id}: {str(e)}"
-        logger.error(error_message, exc_info=True)
-        update_job_status(job_id, JobStatus.FAILED, error=str(e))
-        # Optionally raise exception to mark Celery task as failed
-        # raise e
-        return {"job_id": job_id, "status": "failed", "error": str(e)}
+        # Check if the task was revoked (cancelled)
+        # This requires inspecting Celery's internal state, which can be complex.
+        # A simpler approach is to check the job status in Redis before marking as failed.
+        current_job_data = get_job_data(job_id)
+        if current_job_data and current_job_data.get("status") == JobStatus.CANCELLED.value:
+            logger.info(f"Job {job_id} was cancelled during execution. Skipping failure update.")
+            # Return status reflecting cancellation if possible, though Celery might override
+            return {"job_id": job_id, "status": "cancelled", "error": "Job cancelled during execution."}
+        else:
+            error_message = f"Error processing job {job_id}: {str(e)}"
+            logger.error(error_message, exc_info=True)
+            update_job_status(job_id, JobStatus.FAILED, error=str(e))
+            # Clean up lookup hash on failure
+            try:
+                cache_key = _generate_cache_key(request_data)
+                lookup_key = f"{JOB_CACHE_KEY_LOOKUP}{cache_key}"
+                redis_client.hdel(lookup_key, cache_key)
+            except Exception as cleanup_e:
+                 logger.error(f"Failed to cleanup lookup hash for failed job {job_id}: {cleanup_e}", exc_info=True)
+            # Optionally raise exception to mark Celery task as failed
+            # raise e
+            return {"job_id": job_id, "status": "failed", "error": str(e)}
     finally:
-        # Ensure job is removed from the active set regardless of outcome
+        # Ensure job is removed from the active set regardless of outcome (unless cancelled, handled there)
         if redis_client:
-            redis_client.srem(ACTIVE_JOBS_SET, job_id)
-            logger.info(f"Removed job {job_id} from active set.")
+            current_job_data = get_job_data(job_id) # Re-check status before removing
+            if current_job_data and current_job_data.get("status") != JobStatus.CANCELLED.value:
+                 if redis_client.srem(ACTIVE_JOBS_SET, job_id): # Returns 1 if removed, 0 if not present
+                    logger.info(f"Removed job {job_id} from active set.")
+            # Cleanup for lookup hash is handled on completion, failure, or cancellation now.
