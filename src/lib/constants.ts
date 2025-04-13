@@ -11,6 +11,18 @@ export const features = [
     description: "Test your knowledge with AI-generated quizzes",
     url: "/generate-quiz",
   },
+  {
+    id: 3,
+    title: "Generate Flashcards",
+    description: "Create flashcards for effective memorization",
+    url: "/flashcards",
+  },
+  {
+    id: 4,
+    title: "AI Tutor",
+    description: "Get personalized tutoring sessions with AI",
+    url: "/ai-tutor",
+  }
 ];
 
 export const mockRoadmaps = [
