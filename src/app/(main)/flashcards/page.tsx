@@ -1,0 +1,135 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { H2 } from "@/components/typography/h2";
+import { Para } from "@/components/typography/para";
+import { Button } from "@/components/ui/button";
+
+interface FlashcardSet {
+  id: string;
+  topic: string;
+  difficulty: string;
+  createdAt: string;
+  flashcards: {
+    id: string;
+    isLearned: boolean;
+  }[];
+}
+
+export default function FlashcardsIndex() {
+  const router = useRouter();
+  const [flashcardSets, setFlashcardSets] = useState<FlashcardSet[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchFlashcardSets = async () => {
+      try {
+        const response = await fetch("/api/flashcards");
+        if (!response.ok) {
+          throw new Error("Failed to fetch flashcard sets");
+        }
+        const data = await response.json();
+        setFlashcardSets(data);
+      } catch (err) {
+        setError("Failed to load flashcard sets");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFlashcardSets();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 h-6 w-6 animate-spin rounded-full border-t-2 border-b-2 border-gray-900"></div>
+          <Para>Loading flashcard sets...</Para>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-10 pl-32">
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <H2>Your Flashcards</H2>
+          <Para>
+            Review and study with your personalized flashcard sets.
+          </Para>
+        </div>
+        <Button 
+          onClick={() => router.push("/flashcards/create")}
+          className="rounded-none text-lg"
+        >
+          CREATE NEW FLASHCARDS
+        </Button>
+      </div>
+
+      {error && (
+        <div className="mb-6 rounded-lg bg-red-100 p-4 text-red-700">
+          <Para>{error}</Para>
+        </div>
+      )}
+
+      {flashcardSets.length === 0 ? (
+        <div className="mt-8 text-center">
+          <Para className="mb-6 text-gray-500">
+            You haven't created any flashcard sets yet.
+          </Para>
+          <Button 
+            onClick={() => router.push("/flashcards/create")}
+            className="rounded-none text-lg"
+          >
+            CREATE YOUR FIRST FLASHCARDS
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-6">
+          {flashcardSets.map((set) => {
+            const learnedCount = set.flashcards.filter(card => card.isLearned).length;
+            const totalCards = set.flashcards.length;
+            const progressPercentage = totalCards > 0 
+              ? Math.round((learnedCount / totalCards) * 100) 
+              : 0;
+            
+            return (
+              <div
+                key={set.id}
+                className="flex items-center justify-between rounded-xl bg-white p-6"
+              >
+                <div>
+                  <h3 className="mb-2 text-xl font-semibold">{set.topic}</h3>
+                  <p className="text-gray-600">
+                    {set.difficulty.charAt(0).toUpperCase() + set.difficulty.slice(1)} · 
+                    {totalCards} cards
+                  </p>
+                  <p className="mt-2 text-sm text-gray-500">
+                    Created on {new Date(set.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <span className="text-brand-logo-text text-2xl font-bold">
+                      {progressPercentage}%
+                    </span>
+                    <p className="text-sm text-gray-500">Learned</p>
+                  </div>
+                  <Link href={`/flashcards/${set.id}`}>
+                    <Button variant="outline">Study</Button>
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
