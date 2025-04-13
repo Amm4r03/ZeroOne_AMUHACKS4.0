@@ -38,6 +38,17 @@ This API provides endpoints to generate educational videos based on a given topi
     ```
 
 3.  **Install Dependencies:**
+   
+    For Ubuntu:
+    ```bash
+    sudo apt install pkg-config libpango1.0-dev libcairo2-dev libx11-dev
+    ```
+
+    For Arch:
+    ```bash
+    sudo pacman -S libx11 cairo
+    ```
+
     ```bash
     pip install -r requirements.txt
     ```
