@@ -68,7 +68,7 @@ This API provides endpoints to generate educational videos based on a given topi
 
 1.  **Start Redis Server:** Ensure your Redis server is running. (Consult Redis documentation if needed).
 
-2.  **Start Celery Worker:** Open a terminal, navigate to the project root (`tts` directory in this case, one level above `edu_video_generator`), activate the virtual environment, and run:
+2.  **Start Celery Worker:** Open a terminal, navigate to the project root (one level above `edu_video_generator`), activate the virtual environment, and run:
     ```bash
     celery -A edu_video_generator.src.api.service worker --loglevel=info -P solo
     ```
