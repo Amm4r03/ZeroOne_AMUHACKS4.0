@@ -18,6 +18,7 @@ model User {
   Roadmap       Roadmap[]
   Quiz          Quiz[]
   AiTutorVideos AiTutorVideo[] // Add relation to AiTutorVideo
+  FlashcardSet FlashcardSet[]
 }
 
 // New model for storing AI Tutor video generation history
@@ -105,4 +106,29 @@ model SubtopicDetail {
   details      String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model FlashcardSet {
+  id         String      @id @default(uuid())
+  userId     String
+  user       User        @relation(fields: [userId], references: [id])
+  topic      String
+  difficulty String
+  createdAt  DateTime    @default(now())
+  flashcards Flashcard[]
+  
+  @@index([userId])
+}
+
+model Flashcard {
+  id        String       @id @default(uuid())
+  setId     String
+  set       FlashcardSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  question  String
+  hint      String
+  answer    String
+  isLearned Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  
+  @@index([setId])
 }
