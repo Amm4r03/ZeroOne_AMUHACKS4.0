@@ -15,8 +15,8 @@ interface RouteParams {
 
 // Use NextRequest and explicitly type the context object containing params
 export async function GET(
-  request: NextRequest, // Use NextRequest
-  { params }: { params: RouteParams } // Type the context object
+  request: NextRequest,
+  { params }: { params: { jobId: string } } // Directly define the type inline
 ) {
   // Access jobId from the destructured params
   const jobId = params.jobId;
