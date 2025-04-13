@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { BookOpen, Loader2 } from "lucide-react";
 import { H2 } from "@/components/typography/h2";
 import { Para } from "@/components/typography/para";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 
 interface FlashcardSet {
   id: string;
@@ -28,9 +30,7 @@ export default function FlashcardsIndex() {
     const fetchFlashcardSets = async () => {
       try {
         const response = await fetch("/api/flashcards");
-        if (!response.ok) {
-          throw new Error("Failed to fetch flashcard sets");
-        }
+        if (!response.ok) throw new Error("Failed to fetch flashcard sets");
         const data = await response.json();
         setFlashcardSets(data);
       } catch (err) {
@@ -48,8 +48,8 @@ export default function FlashcardsIndex() {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
-          <div className="mb-4 h-6 w-6 animate-spin rounded-full border-t-2 border-b-2 border-gray-900"></div>
-          <Para>Loading flashcard sets...</Para>
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-gray-500" />
+          <Para className="mt-4">Loading flashcard sets...</Para>
         </div>
       </div>
     );
@@ -59,9 +59,12 @@ export default function FlashcardsIndex() {
     <div className="p-10 pl-32">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <H2>Your Flashcards</H2>
+          <H2 className="flex items-center gap-2">
+            <BookOpen className="h-6 w-6" />
+            Your Flashcards
+          </H2>
           <Para>
-            Review and study with your personalized flashcard sets.
+            Review and study with your personalized flashcard sets
           </Para>
         </div>
         <Button 
@@ -73,7 +76,7 @@ export default function FlashcardsIndex() {
       </div>
 
       {error && (
-        <div className="mb-6 rounded-lg bg-red-100 p-4 text-red-700">
+        <div className="mb-6 rounded-lg bg-red-50 p-4 text-red-700">
           <Para>{error}</Para>
         </div>
       )}
@@ -81,7 +84,7 @@ export default function FlashcardsIndex() {
       {flashcardSets.length === 0 ? (
         <div className="mt-8 text-center">
           <Para className="mb-6 text-gray-500">
-            You haven't created any flashcard sets yet.
+            You haven&apos;t created any flashcard sets yet
           </Para>
           <Button 
             onClick={() => router.push("/flashcards/create")}
