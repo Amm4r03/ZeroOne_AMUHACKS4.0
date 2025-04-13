@@ -1,0 +1,27 @@
+llm
+llm-gemini
+moviepy
+manim
+python-dotenv
+diskcache
+piper-tts
+pydub # For inserting audio pauses
+
+# For Kokoro TTS
+kokoro>=0.9.4
+soundfile
+torch --index-url https://download.pytorch.org/whl/cpu
+
+# For calling the audio API
+requests>=2.25.0
+
+# For plotting charts
+matplotlib>=3.5.0
+
+# For FastAPI API
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+
+# For Background Tasks (Celery + Redis)
+celery>=5.3.0
+redis>=4.5.0
