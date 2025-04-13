@@ -57,8 +57,13 @@ export async function GET(
     // Return the status data from the external API
     return NextResponse.json(data);
 
-  } catch (error) {
+  } catch (error: any) { // Add type annotation for error
     console.error(`Error fetching status for job ${jobId}:`, error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    // Check for timeout errors specifically
+    if (error.name === 'AbortError' || error.code === 'UND_ERR_CONNECT_TIMEOUT') {
+      return NextResponse.json({ error: 'Request to external AI Tutor API timed out.' }, { status: 504 }); // Gateway Timeout
+    }
+    // Generic internal server error for other issues
+    return NextResponse.json({ error: 'Internal Server Error while fetching job status.' }, { status: 500 });
   }
 }

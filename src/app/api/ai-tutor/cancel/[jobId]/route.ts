@@ -8,15 +8,10 @@ if (!AITUTOR_API_BASE_URL) {
 
 const EXTERNAL_API_CANCEL_URL_BASE = `${AITUTOR_API_BASE_URL}cancel/`;
 
-// Define the expected shape of the route parameters
-interface RouteParams {
-  jobId: string;
-}
-
-// Use NextRequest and explicitly type the context object containing params
+// Use NextRequest and type params directly as the second argument
 export async function GET(
-  request: NextRequest, // Use NextRequest
-  { params }: { params: RouteParams } // Type the context object
+  request: NextRequest,
+  { params }: { params: { jobId: string } } // Type params directly
 ) {
   // Access jobId from the destructured params
   const jobId = params.jobId;
@@ -36,11 +31,9 @@ export async function GET(
     });
 
     if (!response.ok) {
-      // Handle cases where the job might not be found (404) or other errors
       const errorData = await response.text();
        if (response.status === 404) {
          console.warn(`Cancel request: Job ${jobId} not found on external API.`);
-         // Still might want to return success to frontend if job is gone? Or error? Let's return error.
          return NextResponse.json({ error: `Job ${jobId} not found for cancellation` }, { status: 404 });
        }
       console.error(`External API Error cancelling job ${jobId}:`, response.status, errorData);
