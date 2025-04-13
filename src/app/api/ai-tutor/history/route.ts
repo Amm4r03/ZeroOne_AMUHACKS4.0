@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/db';
 
+export const dynamic = 'force-dynamic'; // Force dynamic rendering
+
 export async function GET() {
   try {
     // 1. Get User ID from authentication context
